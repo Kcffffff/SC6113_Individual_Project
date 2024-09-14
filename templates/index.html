@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NTU NFT Marketplace</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        input, select {
+            padding: 10px;
+            margin: 10px 0;
+            width: 80%;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .section {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin-top: 20px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>NTU NFT Marketplace</h1>
+    <button id="connectButton">Connect to MetaMask</button>
+    <div id="marketSection" class="hidden">
+        <div class="section">
+            <h2>List Your NFT</h2>
+            <input type="text" id="nftAddressInput" placeholder="NFT Contract Address">
+            <input type="number" id="tokenIdInput" placeholder="Token ID">
+            <input type="number" id="priceInput" placeholder="Price in Wei">
+            <button id="listButton">List NFT</button>
+        </div>
+        
+        <div class="section">
+            <h2>Batch List NFTs</h2>
+            <input type="text" id="batchNftAddressInput" placeholder="NFT Contract Address">
+            <input type="text" id="batchTokenIdsInput" placeholder="Token IDs (comma-separated)">
+            <input type="number" id="batchPriceInput" placeholder="Price in Wei">
+            <button id="batchListButton">Batch List NFTs</button>
+        </div>
+        
+        <div class="section">
+            <h2>Change Price</h2>
+            <input type="text" id="changePriceAddressInput" placeholder="NFT Contract Address">
+            <input type="number" id="changePriceTokenIdInput" placeholder="Token ID">
+            <input type="number" id="newPriceInput" placeholder="New Price in Wei">
+            <button id="changePriceButton">Change Price</button>
+        </div>
+
+        <div class="section">
+            <h2>Remove NFT</h2>
+            <input type="text" id="nftRemoveAddressInput" placeholder="NFT Contract Address">
+            <input type="number" id="removeTokenIdInput" placeholder="Token ID">
+            <button id="removeButton">Remove NFT</button>
+        </div>
+
+        <div class="section">
+            <h2>Batch Remove NFTs</h2>
+            <input type="text" id="batchRemoveAddressInput" placeholder="NFT Contract Address">
+            <input type="text" id="batchRemoveTokenIdsInput" placeholder="Token IDs (comma-separated)">
+            <button id="batchRemoveButton">Batch Remove NFTs</button>
+        </div>
+
+        <div class="section">
+            <h2>Search NFTs</h2>
+            <input type="text" id="searchAddressInput" placeholder="NFT Contract Address">
+            <button id="searchButton">Search NFTs</button>
+            <select id="nftListDropdown" size="5" style="width: 90%;"></select>
+        </div>
+
+        <div class="section">
+            <h2>Buy NFT</h2>
+            <input type="text" id="nftBuyAddressInput" placeholder="NFT Contract Address">
+            <input type="number" id="buyTokenIdInput" placeholder="Token ID">
+            <input type="number" id="ethValueInput" placeholder="Amount in Wei">
+            <button id="buyButton">Buy NFT</button>
+        </div>
+    </div>
+    <p id="status"></p>
+
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.5.2/dist/web3.min.js"></script>
+    <script>
+        let web3;
+        let account;
+        let contract;
+        const contractAddress = '0xb0c450ac3aa99454455dc9e0e7e71eff2d982f84'; 
+        const contractABI = [
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "nft_add",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256[]",
+                    "name": "token_ids",
+                    "type": "uint256[]"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "price",
+                    "type": "uint256"
+                }
+            ],
+            "name": "batch_list",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "nft_add",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256[]",
+                    "name": "token_ids",
+                    "type": "uint256[]"
+                }
+            ],
+            "name": "batch_remove",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "seller",
+                    "type": "address"
+                },
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "nft_add",
+                    "type": "address"
+                },
+                {
+                    "indexed": true,
+                    "internalType": "uint256",
+                    "name": "token_id",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "new_price",
+                    "type": "uint256"
+                }
+            ],
+            "name": "Change",
+            "type": "event"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "nft_add",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "token_id",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "new_price",
+                    "type": "uint256"
+                }
+            ],
+            "name": "change_price",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "nft_add",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "token_id",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "price",
+                    "type": "uint256"
+                }
+            ],
+            "name": "list",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "seller",
+                    "type": "address"
+                },
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "nft_add",
+                    "type": "address"
+                },
+                {
+                    "indexed": true,
+                    "internalType": "uint256",
+                    "name": "token_id",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "price",
+                    "type": "uint256"
+                }
+            ],
+            "name": "List",
+            "type": "event"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "nft_add",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "token_id",
+                    "type": "uint256"
+                }
+            ],
+            "name": "purchase",
+            "outputs": [],
+            "stateMutability": "payable",
+            "type": "function"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "buyer",
+                    "type": "address"
+                },
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "nft_add",
+                    "type": "address"
+                },
+                {
+                    "indexed": true,
+                    "internalType": "uint256",
+                    "name": "token_id",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "price",
+                    "type": "uint256"
+                }
+            ],
+            "name": "Purchase",
+            "type": "event"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "nft_add",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "token_id",
+                    "type": "uint256"
+                }
+            ],
+            "name": "remove",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "seller",
+                    "type": "address"
+                },
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "nft_add",
+                    "type": "address"
+                },
+                {
+                    "indexed": true,
+                    "internalType": "uint256",
+                    "name": "token_id",
+                    "type": "uint256"
+                }
+            ],
+            "name": "Remove",
+            "type": "event"
+        },
+        {
+            "stateMutability": "payable",
+            "type": "fallback"
+        },
+        {
+            "stateMutability": "payable",
+            "type": "receive"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "",
+                    "type": "uint256"
+                }
+            ],
+            "name": "nft_listed",
+            "outputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "token_id",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "price",
+                    "type": "uint256"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "",
+                    "type": "uint256"
+                }
+            ],
+            "name": "nft_order",
+            "outputs": [
+                {
+                    "internalType": "address",
+                    "name": "owner",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "price",
+                    "type": "uint256"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                },
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "bytes",
+                    "name": "",
+                    "type": "bytes"
+                }
+            ],
+            "name": "onERC721Received",
+            "outputs": [
+                {
+                    "internalType": "bytes4",
+                    "name": "",
+                    "type": "bytes4"
+                }
+            ],
+            "stateMutability": "pure",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "nft_add",
+                    "type": "address"
+                }
+            ],
+            "name": "search_NFTs",
+            "outputs": [
+                {
+                    "components": [
+                        {
+                            "internalType": "uint256",
+                            "name": "token_id",
+                            "type": "uint256"
+                        },
+                        {
+                            "internalType": "uint256",
+                            "name": "price",
+                            "type": "uint256"
+                        }
+                    ],
+                    "internalType": "struct NTU_Transaction.NFT_listed[]",
+                    "name": "",
+                    "type": "tuple[]"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        }
+    ]; 
+
+        document.getElementById('connectButton').onclick = async () => {
+            if (window.ethereum) {
+                try {
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    web3 = new Web3(window.ethereum);
+                    const accounts = await web3.eth.getAccounts();
+                    account = accounts[0];
+                    contract = new web3.eth.Contract(contractABI, contractAddress);
+                    document.getElementById('connectButton').innerText = `Connected: ${account}`;
+                    document.getElementById('marketSection').classList.remove('hidden');
+                } catch (error) {
+                    console.error('User denied account access', error);
+                }
+            } else {
+                alert('MetaMask not detected. Please install MetaMask and try again.');
+            }
+        };
+
+        document.getElementById('listButton').onclick = async function() {
+            const nftAdd = document.getElementById('nftAddressInput').value;
+            const tokenId = document.getElementById('tokenIdInput').value;
+            const price = document.getElementById('priceInput').value;
+            try {
+                await contract.methods.list(nftAdd, tokenId, price).send({ from: account });
+                document.getElementById('status').innerText = 'NFT listed successfully!';
+            } catch (error) {
+                console.error('Error listing NFT', error);
+                document.getElementById('status').innerText = 'Failed to list NFT.';
+            }
+        };
+
+        document.getElementById('batchListButton').onclick = async function() {
+            const nftAdd = document.getElementById('batchNftAddressInput').value;
+            const tokenIds = document.getElementById('batchTokenIdsInput').value.split(',').map(id => parseInt(id.trim()));
+            const price = document.getElementById('batchPriceInput').value;
+            try {
+                await contract.methods.batch_list(nftAdd, tokenIds, price).send({ from: account });
+                document.getElementById('status').innerText = 'Batch NFTs listed successfully!';
+            } catch (error) {
+                console.error('Error listing batch NFTs', error);
+                document.getElementById('status').innerText = 'Failed to batch list NFTs.';
+            }
+        };
+
+        document.getElementById('changePriceButton').onclick = async function() {
+            const nftAdd = document.getElementById('changePriceAddressInput').value;
+            const tokenId = document.getElementById('changePriceTokenIdInput').value;
+            const newPrice = document.getElementById('newPriceInput').value;
+            try {
+                await contract.methods.change_price(nftAdd, tokenId, newPrice).send({ from: account });
+                document.getElementById('status').innerText = 'Price changed successfully!';
+            } catch (error) {
+                console.error('Error changing price', error);
+                document.getElementById('status').innerText = 'Failed to change price.';
+            }
+        };
+
+        document.getElementById('removeButton').onclick = async function() {
+            const nftAdd = document.getElementById('nftRemoveAddressInput').value;
+            const tokenId = document.getElementById('removeTokenIdInput').value;
+            try {
+                await contract.methods.remove(nftAdd, tokenId).send({ from: account });
+                document.getElementById('status').innerText = 'NFT removed successfully!';
+            } catch (error) {
+                console.error('Error removing NFT', error);
+                document.getElementById('status').innerText = 'Failed to remove NFT.';
+            }
+        };
+
+        document.getElementById('batchRemoveButton').onclick = async function() {
+            const nftAdd = document.getElementById('batchRemoveAddressInput').value;
+            const tokenIds = document.getElementById('batchRemoveTokenIdsInput').value.split(',').map(id => parseInt(id.trim()));
+            try {
+                await contract.methods.batch_remove(nftAdd, tokenIds).send({ from: account });
+                document.getElementById('status').innerText = 'Batch NFTs removed successfully!';
+            } catch (error) {
+                console.error('Error removing batch listings', error);
+                document.getElementById('status').innerText = 'Failed to batch remove NFTs.';
+            }
+        };
+
+        document.getElementById('searchButton').onclick = async function() {
+            const nftAdd = document.getElementById('searchAddressInput').value;
+            try {
+                const nfts = await contract.methods.search_NFTs(nftAdd).call();
+                const dropdown = document.getElementById('nftListDropdown');
+                dropdown.innerHTML = '';
+                nfts.forEach(nft => {
+                    let option = document.createElement('option');
+                    option.text = `Token ID: ${nft.token_id}, Price: ${nft.price} Wei`;
+                    option.value = nft.token_id;
+                    dropdown.add(option);
+                });
+                document.getElementById('status').innerText = 'NFTs loaded!';
+            } catch (error) {
+                console.error('Error searching NFTs', error);
+                document.getElementById('status').innerText = 'Failed to load NFTs.';
+            }
+        };
+
+        document.getElementById('buyButton').onclick = async function() {
+            const nftAdd = document.getElementById('nftBuyAddressInput').value;
+            const tokenId = document.getElementById('buyTokenIdInput').value;
+            const ethValue = document.getElementById('ethValueInput').value;
+            try {
+                await contract.methods.purchase(nftAdd, tokenId).send({ from: account, value: ethValue });
+                document.getElementById('status').innerText = 'NFT purchased successfully!';
+            } catch (error) {
+                console.error('Error purchasing NFT', error);
+                document.getElementById('status').innerText = 'Failed to purchase NFT.';
+            }
+        };
+    </script>
+</body>
+</html>
+
+
+
+
+
+
